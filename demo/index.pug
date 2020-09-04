@@ -1,0 +1,10 @@
+extends base.pug
+
+block content
+
+  #appDiv.root.app
+    hill-chart
+      hill-chart-item(:progress="0.4" color="hsl(90, 40%, 50%)") Export Vue component
+      hill-chart-item(:progress="0.95") Generate Chart
+
+  script(src="index.coffee")
