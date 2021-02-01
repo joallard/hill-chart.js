@@ -1,20 +1,22 @@
 <template lang="pug">
 svg.hill-chart.chart(v-bind="{width, height}")
-  path.curve(:d="curvePathD" stroke="#999" fill="none")
+  path.curve(:d="curveD" stroke="#999" fill="none")
 
   line.axis.x-axis(v-if="display.xAxis" v-bind="xAxis" stroke='#ccc')
   line.axis.middle-axis(v-if="display.middleAxis" v-bind="middleAxis" stroke='#ccc')
 
-  hill-chart-item(v-for="(item, i) in items" :key="i" v-bind="item")
-  slot
+  .items
+    hill-chart-item(v-for="(item, i) in items" :key="i" v-bind="item")
+    slot
 </template>
 
 <script>
 // import HillChartItem from './HillChartItem.vue'
-import * as d3 from 'd3'
+import range from 'lodash/range'
+import {scaleLinear} from 'd3-scale'
 
 // Maps 0..1 => 0..1 on a e^x2 curve
-const HillCurve = {f: (x) => Math.exp(-16 * (x-0.5)**2)}
+const ExpCurve = (x) => Math.exp(-16 * (x-0.5)**2)
 
 const Line = {
   horizontal: ({y, x1, x2}) => ({x1, x2, y1: y, y2: y}),
@@ -35,6 +37,14 @@ const padding = (params) => {
   }
 }
 
+const Path = {
+  d: (points) => "M" + points.join("L")
+}
+
+// Samples 'fn' over a normal (0..1) range, `samples` times
+const sampleFunction = (fn, samples = 500) =>
+  range(0, 1, 1/samples).map((x) => [x, fn(x)])
+
 
 // Turns a chart mapped on (x,y) ∈ (0..1, 0..1), mapped to (width, height).
 // On the svg, y goes from (up..down): top is y=0.
@@ -43,7 +53,7 @@ export default {
   // components: {HillChartItem},
 
   props: {
-    items: Array,
+    items: {type: Array, default: ()=> [] },
     width: { type: Number, default: 600 },
     aspectRatio: { type: Number, default: 3 },
     height: { type: Number, default: function(){ return Rect.height(this) } },
@@ -54,7 +64,9 @@ export default {
     display: {
       xAxis: true,
       middleAxis: true,
-    }
+    },
+
+    curve: ExpCurve,
   }),
 
   computed: {
@@ -64,8 +76,8 @@ export default {
       const {width, height} = this
 
       return {
-        x: d3.scaleLinear([0,1], [left, width-right]),
-        y: d3.scaleLinear([0,1], [height-bottom, top])
+        x: scaleLinear([0,1], [left, width-right]),
+        y: scaleLinear([0,1], [height-bottom, top])
       }
     },
 
@@ -81,22 +93,16 @@ export default {
       return Line.horizontal({y: y(-0.08), x1: x(0), x2: x(1)})
     },
 
+    // Charts `this.curve` on the local context
     // Returns the curve's path[d] SVG attribute
-    curvePathD: function(){
-      const N_POINTS = 500
-      const curvePoints = d3.range(0, 1, 1/N_POINTS).map((x) => [x, this.f(x)])
-
-      const {x,y} = this.s
-      const sdx = (d) => this.s.x(d)
-      const sdy = (d) => this.s.y(d)
-
-      const lineGenerator = d3.line().x(sdx).y(sdy)
-      return lineGenerator(curvePoints)
+    curveD: function(){
+      const curvePoints = sampleFunction(this.curve).map(this.scalePoint)
+      return Path.d(curvePoints)
     }
   },
 
   methods: {
-    f: HillCurve.f,
+    scalePoint: function([x,y]){ return [this.s.x(x), this.s.y(y)] },
   }
 }
 </script>
